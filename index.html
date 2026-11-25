@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f5f0">
+  <title>Paperwork, in perspective | Burden reduction dashboard</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #202c32;
+      --muted: #647276;
+      --line: #dedfd8;
+      --paper: #f6f5f0;
+      --individuals: #d77c59;
+      --organizations: #387587;
+      --both: #7d936d;
+      --unspecified: #a7a5a0;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: "Segoe UI", Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .page { max-width: 1440px; margin: 0 auto; padding: 0 56px; }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      min-height: 76px;
+      border-bottom: 1px solid var(--line);
+    }
+    .brand { display: flex; align-items: center; gap: 11px; font-size: 12px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+    .brand-mark { width: 25px; height: 25px; border: 1px solid #778987; border-radius: 50%; display: grid; place-items: center; }
+    .brand-mark::after { content: ""; width: 9px; height: 9px; border-radius: 50%; background: #537c78; }
+    .topbar-note { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    main { padding: 65px 0 35px; }
+    .eyebrow { margin: 0 0 17px; color: #647e78; font-size: 11px; font-weight: 750; letter-spacing: .16em; text-transform: uppercase; }
+    h1 { max-width: 850px; margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: clamp(42px, 5.2vw, 72px); font-weight: 400; letter-spacing: -.045em; line-height: 1.04; }
+    .intro { max-width: 610px; margin: 23px 0 0; color: #5d6b6e; font-size: 16px; line-height: 1.65; }
+    .dashboard { display: grid; grid-template-columns: minmax(210px, 270px) minmax(0, 1fr); gap: 48px; margin-top: 57px; border-top: 1px solid var(--line); }
+    .sidebar { padding-top: 31px; }
+    .section-label { margin: 0; color: var(--muted); font-size: 11px; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; }
+    .stat { padding: 24px 0; border-bottom: 1px solid var(--line); }
+    .stat-value { display: block; font-family: Georgia, "Times New Roman", serif; font-size: clamp(33px, 3.2vw, 44px); letter-spacing: -.04em; line-height: 1; }
+    .stat-label { display: block; margin-top: 9px; color: var(--muted); font-size: 13px; line-height: 1.4; }
+    .legend { padding-top: 30px; }
+    .legend-list { display: grid; gap: 13px; margin: 21px 0 0; padding: 0; list-style: none; }
+    .legend-list li { display: flex; align-items: center; gap: 10px; color: #4a595c; font-size: 13px; }
+    .swatch { width: 10px; height: 10px; flex: none; border-radius: 50%; background: var(--color); }
+    .sidebar-note { max-width: 220px; margin: 34px 0 0; color: #82908e; font-size: 12px; line-height: 1.6; }
+    .chart-panel { min-width: 0; padding-top: 31px; }
+    .chart-header { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; }
+    .chart-title { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: 24px; font-weight: 400; letter-spacing: -.02em; }
+    .chart-hint { color: #7d8b89; font-size: 12px; white-space: nowrap; }
+    #chart { width: 100%; }
+    #chart svg { display: block; width: 100%; overflow: visible; }
+    .bubble { cursor: pointer; stroke: var(--paper); stroke-width: 1.2px; transition: opacity .15s, stroke .15s; }
+    .bubble:hover, a:focus .bubble { stroke: #202c32; stroke-width: 2px; }
+    #chart a:focus { outline: none; }
+    .caption { margin: 8px 0 0; color: #7b8887; font-size: 12px; line-height: 1.6; }
+    .status { padding: 50px 0; color: #87503c; line-height: 1.5; }
+    .tooltip {
+      position: fixed; z-index: 5; width: min(310px, calc(100vw - 24px)); padding: 17px 19px;
+      border: 1px solid #dfe4df; border-radius: 5px; background: #fff;
+      box-shadow: 0 12px 32px rgba(32, 44, 50, .14); pointer-events: none;
+    }
+    .tooltip[hidden] { display: none; }
+    .tooltip-name { margin: 0 0 6px; font-family: Georgia, "Times New Roman", serif; font-size: 17px; line-height: 1.25; }
+    .tooltip-agency { margin: 0 0 14px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+    .tooltip-row { display: flex; justify-content: space-between; gap: 12px; padding-top: 8px; border-top: 1px solid #edf0ed; font-size: 12px; line-height: 1.4; }
+    .tooltip-row + .tooltip-row { margin-top: 8px; }
+    .tooltip-row span { color: var(--muted); }
+    .tooltip-row strong { text-align: right; }
+    footer { display: flex; justify-content: space-between; gap: 20px; padding: 24px 0 32px; border-top: 1px solid var(--line); color: #81908e; font-size: 11px; line-height: 1.5; }
+    footer a { color: inherit; text-decoration-color: #b7c0bb; text-underline-offset: 3px; }
+    @media (max-width: 760px) {
+      .page { padding: 0 22px; }
+      .topbar { min-height: 66px; }
+      .topbar-note { display: none; }
+      main { padding-top: 45px; }
+      .dashboard { grid-template-columns: 1fr; gap: 0; margin-top: 40px; }
+      .sidebar { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; }
+      .sidebar > .section-label, .legend, .sidebar-note { grid-column: 1 / -1; }
+      .stat { padding: 20px 0; }
+      .stat-value { font-size: clamp(28px, 7vw, 40px); overflow-wrap: anywhere; }
+      .legend { padding-top: 23px; }
+      .legend-list { display: flex; flex-wrap: wrap; gap: 12px 20px; margin-top: 15px; }
+      .sidebar-note { display: none; }
+      .chart-panel { padding-top: 40px; }
+      .chart-header { align-items: flex-start; }
+      .chart-hint { white-space: normal; text-align: right; }
+      footer { flex-direction: column; gap: 6px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"></span> The paperwork picture</div>
+      <div class="topbar-note">A closer look at federal paperwork</div>
+    </header>
+
+    <main>
+      <p class="eyebrow">Administrative burden reduction &nbsp; / &nbsp; November 2026</p>
+      <h1>Less paperwork.<br>More time back.</h1>
+      <p class="intro">A look at federal information collections with the largest reductions in annual paperwork burden, and the people and organizations who benefit.</p>
+
+      <div class="dashboard">
+        <aside class="sidebar" aria-label="Dashboard summary">
+          <p class="section-label">The big picture</p>
+          <div class="stat"><strong class="stat-value" id="total-hours">—</strong><span class="stat-label">annual hours saved</span></div>
+          <div class="stat"><strong class="stat-value" id="total-collections">—</strong><span class="stat-label">information collections</span></div>
+          <div class="legend">
+            <p class="section-label">Who responds</p>
+            <ul class="legend-list">
+              <li><span class="swatch" style="--color: var(--individuals)"></span>Individuals</li>
+              <li><span class="swatch" style="--color: var(--organizations)"></span>Organizations</li>
+              <li><span class="swatch" style="--color: var(--both)"></span>Both</li>
+              <li><span class="swatch" style="--color: var(--unspecified)"></span>Not specified</li>
+            </ul>
+          </div>
+          <p class="sidebar-note">Each circle represents one information collection with at least 75,000 annual hours saved.</p>
+        </aside>
+
+        <section class="chart-panel" aria-labelledby="chart-title">
+          <div class="chart-header">
+            <h2 class="chart-title" id="chart-title">Loading the big picture…</h2>
+            <span class="chart-hint">Hover to explore &nbsp; · &nbsp; Click to view source ↗</span>
+          </div>
+          <div id="chart" aria-live="polite"><p class="status">Loading data…</p></div>
+          <p class="caption">Circle area represents annual hours saved. A minimum radius of 3 pixels keeps the smallest circles visible and clickable.</p>
+        </section>
+      </div>
+    </main>
+    <footer><span>Source: <a href="https://www.reginfo.gov/public/do/PRAMain" target="_blank" rel="noopener noreferrer">reginfo.gov ICR data ↗</a></span><span>Compiled November 2026 &nbsp; / &nbsp; Annual burden hours</span></footer>
+  </div>
+
+  <div class="tooltip" id="tooltip" role="tooltip" hidden>
+    <p class="tooltip-name"></p>
+    <p class="tooltip-agency"></p>
+    <div class="tooltip-row"><span>Annual hours saved</span><strong class="tooltip-saved"></strong></div>
+    <div class="tooltip-row"><span>Previous → new</span><strong class="tooltip-change"></strong></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+  <script>
+    // Load the CSV directly so the site works on any static host.
+    const chart = document.getElementById("chart");
+    const tooltip = document.getElementById("tooltip");
+    const colors = {
+      Individuals: "#d77c59",
+      Organizations: "#387587",
+      Both: "#7d936d",
+      "Not specified": "#a7a5a0"
+    };
+
+    function showError(message) {
+      document.getElementById("chart-title").textContent = "Data unavailable";
+      chart.textContent = "";
+      const error = document.createElement("p");
+      error.className = "status";
+      error.textContent = message;
+      chart.appendChild(error);
+    }
+
+    if (typeof d3 === "undefined") {
+      showError("The chart library could not be loaded. Please check your connection and refresh.");
+    } else {
+      const format = d3.format(",");
+      d3.csv("burden_reductions.csv", d => ({
+        ...d,
+        reduction_hours: Number(d.reduction_hours),
+        previous_hours: Number(d.previous_hours),
+        new_hours: Number(d.new_hours)
+      })).then(data => {
+        if (!data.length || data.some(d =>
+          !d.icr_name || !d.agency || !d.reginfo_url ||
+          !Object.hasOwn(colors, d.respondent_type) ||
+          !Number.isFinite(d.reduction_hours) || d.reduction_hours <= 0 ||
+          !Number.isFinite(d.previous_hours) || !Number.isFinite(d.new_hours)
+        )) {
+          throw new Error("The CSV is empty or contains invalid data.");
+        }
+
+        const totalHours = format(d3.sum(data, d => d.reduction_hours));
+        document.getElementById("total-hours").textContent = totalHours;
+        document.getElementById("total-collections").textContent = format(data.length);
+        document.getElementById("chart-title").textContent = `${format(data.length)} collections · ${totalHours} hours saved`;
+        chart.textContent = "";
+        const svg = d3.select(chart).append("svg")
+          .attr("role", "group")
+          .attr("aria-label", "Packed circles showing annual hours saved by information collection. Focus a circle for details or activate it to visit its source.");
+
+        const nodes = data.slice().sort((a, b) => d3.descending(a.reduction_hours, b.reduction_hours))
+          .map(d => ({ data: d }));
+
+        function positionTooltip(x, y) {
+          const margin = 12;
+          tooltip.style.left = Math.max(margin, Math.min(x + 14, window.innerWidth - tooltip.offsetWidth - margin)) + "px";
+          tooltip.style.top = Math.max(margin, Math.min(y + 14, window.innerHeight - tooltip.offsetHeight - margin)) + "px";
+        }
+
+        function showTooltip(event, d) {
+          tooltip.querySelector(".tooltip-name").textContent = d.data.icr_name;
+          tooltip.querySelector(".tooltip-agency").textContent = d.data.agency;
+          tooltip.querySelector(".tooltip-saved").textContent = format(d.data.reduction_hours);
+          tooltip.querySelector(".tooltip-change").textContent = format(d.data.previous_hours) + " → " + format(d.data.new_hours);
+          tooltip.hidden = false;
+          const rect = event.currentTarget.getBoundingClientRect();
+          positionTooltip(event.type === "focus" ? rect.left + rect.width / 2 : event.clientX,
+            event.type === "focus" ? rect.top + rect.height / 2 : event.clientY);
+        }
+
+        // A square-root scale makes circle area proportional to saved hours.
+        // Fit the packed circles while applying the 3px floor before packing.
+        function render() {
+          const width = chart.clientWidth;
+          if (!width) return;
+          const height = Math.max(360, Math.min(750, width * 0.9));
+          const availableRadius = Math.min(width, height) / 2 - 8;
+          let low = 0;
+          let high = availableRadius / Math.sqrt(d3.max(data, d => d.reduction_hours));
+          let enclosure;
+          for (let i = 0; i < 25; i++) {
+            const factor = (low + high) / 2;
+            const radius = d3.scaleSqrt().domain([0, 1]).range([0, factor]);
+            nodes.forEach(node => { node.r = Math.max(3, radius(node.data.reduction_hours)); });
+            d3.packSiblings(nodes);
+            enclosure = d3.packEnclose(nodes);
+            if (enclosure.r <= availableRadius) low = factor;
+            else high = factor;
+          }
+          const radius = d3.scaleSqrt().domain([0, 1]).range([0, low]);
+          nodes.forEach(node => { node.r = Math.max(3, radius(node.data.reduction_hours)); });
+          d3.packSiblings(nodes);
+          enclosure = d3.packEnclose(nodes);
+          svg.attr("viewBox", `0 0 ${width} ${height}`).attr("height", height);
+          const links = svg.selectAll("a").data(nodes, d => d.data.icr_reference_number)
+            .join("a")
+            .attr("href", d => d.data.reginfo_url)
+            .attr("target", "_blank")
+            .attr("rel", "noopener noreferrer")
+            .attr("aria-label", d => `${d.data.icr_name}, ${d.data.agency}, ${format(d.data.reduction_hours)} annual hours saved. Opens source in a new tab.`)
+            .on("pointerenter focus", showTooltip)
+            .on("pointermove", (event) => positionTooltip(event.clientX, event.clientY))
+            .on("pointerleave blur", () => { tooltip.hidden = true; });
+          links.selectAll("circle").data(d => [d]).join("circle")
+            .attr("class", "bubble")
+            .attr("cx", d => d.x - enclosure.x + width / 2)
+            .attr("cy", d => d.y - enclosure.y + height / 2)
+            .attr("r", d => d.r)
+            .attr("fill", d => colors[d.data.respondent_type]);
+        }
+
+        render();
+        let resizeFrame;
+        window.addEventListener("resize", () => {
+          cancelAnimationFrame(resizeFrame);
+          resizeFrame = requestAnimationFrame(() => { tooltip.hidden = true; render(); });
+        });
+      }).catch(error => {
+        console.error("Unable to load the burden reduction data:", error);
+        showError("Unable to load the data. Serve this page over HTTP and check that burden_reductions.csv is available.");
+      });
+    }
+  </script>
+</body>
+</html>

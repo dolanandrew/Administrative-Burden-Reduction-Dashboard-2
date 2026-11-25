@@ -51,14 +51,18 @@
     .legend { padding-top: 30px; }
     .legend-list { display: grid; gap: 13px; margin: 21px 0 0; padding: 0; list-style: none; }
     .legend-list li { display: flex; align-items: center; gap: 10px; color: #4a595c; font-size: 13px; }
+    .legend-list li[hidden] { display: none; }
     .swatch { width: 10px; height: 10px; flex: none; border-radius: 50%; background: var(--color); }
     .sidebar-note { max-width: 220px; margin: 34px 0 0; color: #82908e; font-size: 12px; line-height: 1.6; }
     .chart-panel { min-width: 0; padding-top: 31px; }
     .chart-header { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; }
     .chart-title { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: 24px; font-weight: 400; letter-spacing: -.02em; }
     .chart-hint { color: #7d8b89; font-size: 12px; white-space: nowrap; }
-    #chart { width: 100%; }
-    #chart svg { display: block; width: 100%; overflow: visible; }
+    #chart { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 30px 24px; width: 100%; margin-top: 30px; }
+    .agency-panel { flex: none; max-width: 100%; }
+    .agency-panel svg { display: block; max-width: 100%; }
+    .agency-name { margin: 0 0 5px; font-size: 14px; line-height: 1.35; }
+    .agency-summary { margin: 0 0 12px; color: var(--muted); font-size: 12px; line-height: 1.4; }
     .bubble { cursor: pointer; stroke: var(--paper); stroke-width: 1.2px; transition: opacity .15s, stroke .15s; }
     .bubble:hover, a:focus .bubble { stroke: #202c32; stroke-width: 2px; }
     #chart a:focus { outline: none; }
@@ -109,17 +113,19 @@
       <p class="eyebrow">Administrative burden reduction &nbsp; / &nbsp; November 2026</p>
       <h1>Less paperwork.<br>More time back.</h1>
       <p class="intro">A look at federal information collections with the largest reductions in annual paperwork burden, and the people and organizations who benefit.</p>
+      <p class="caption">Excludes active requests and requests for organizations only.</p>
 
       <div class="dashboard">
         <aside class="sidebar" aria-label="Dashboard summary">
           <p class="section-label">The big picture</p>
           <div class="stat"><strong class="stat-value" id="total-hours">—</strong><span class="stat-label">annual hours saved</span></div>
           <div class="stat"><strong class="stat-value" id="total-collections">—</strong><span class="stat-label">information collections</span></div>
+          <div class="stat"><strong class="stat-value" id="total-agencies">—</strong><span class="stat-label">departments and agencies</span></div>
           <div class="legend">
             <p class="section-label">Who responds</p>
             <ul class="legend-list">
               <li><span class="swatch" style="--color: var(--individuals)"></span>Individuals</li>
-              <li><span class="swatch" style="--color: var(--organizations)"></span>Organizations</li>
+              <li id="organizations-legend"><span class="swatch" style="--color: var(--organizations)"></span>Organizations</li>
               <li><span class="swatch" style="--color: var(--both)"></span>Both</li>
               <li><span class="swatch" style="--color: var(--unspecified)"></span>Not specified</li>
             </ul>
@@ -133,7 +139,7 @@
             <span class="chart-hint">Hover to explore &nbsp; · &nbsp; Click to view source ↗</span>
           </div>
           <div id="chart" aria-live="polite"><p class="status">Loading data…</p></div>
-          <p class="caption">Circle area represents annual hours saved. A minimum radius of 3 pixels keeps the smallest circles visible and clickable.</p>
+          <p class="caption">Circle area represents annual hours saved; sizes are comparable across agencies.</p>
         </section>
       </div>
     </main>
@@ -145,10 +151,14 @@
     <p class="tooltip-agency"></p>
     <div class="tooltip-row"><span>Annual hours saved</span><strong class="tooltip-saved"></strong></div>
     <div class="tooltip-row"><span>Previous → new</span><strong class="tooltip-change"></strong></div>
+    <div class="tooltip-row"><span>Status</span><strong class="tooltip-status"></strong></div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
   <script>
+    const EXCLUDED_ICR_STATUSES = new Set(["Active"]);
+    const EXCLUDED_RESPONDENT_TYPES = new Set(["Organizations"]);
+
     // Load the CSV directly so the site works on any static host.
     const chart = document.getElementById("chart");
     const tooltip = document.getElementById("tooltip");
@@ -171,15 +181,21 @@
     if (typeof d3 === "undefined") {
       showError("The chart library could not be loaded. Please check your connection and refresh.");
     } else {
+      document.getElementById("organizations-legend").hidden = EXCLUDED_RESPONDENT_TYPES.has("Organizations");
       const format = d3.format(",");
       d3.csv("burden_reductions.csv", d => ({
         ...d,
         reduction_hours: Number(d.reduction_hours),
         previous_hours: Number(d.previous_hours),
         new_hours: Number(d.new_hours)
-      })).then(data => {
-        if (!data.length || data.some(d =>
+      })).then(rows => {
+        const data = rows.filter(d =>
+          !EXCLUDED_ICR_STATUSES.has(d.icr_status) &&
+          !EXCLUDED_RESPONDENT_TYPES.has(d.respondent_type)
+        );
+        if (!rows.length || data.some(d =>
           !d.icr_name || !d.agency || !d.reginfo_url ||
+          !d.icr_status ||
           !Object.hasOwn(colors, d.respondent_type) ||
           !Number.isFinite(d.reduction_hours) || d.reduction_hours <= 0 ||
           !Number.isFinite(d.previous_hours) || !Number.isFinite(d.new_hours)
@@ -188,16 +204,20 @@
         }
 
         const totalHours = format(d3.sum(data, d => d.reduction_hours));
+        const agencies = Array.from(d3.group(data, d => d.agency), ([name, collections]) => ({
+          name,
+          collections: collections.slice().sort((a, b) => d3.descending(a.reduction_hours, b.reduction_hours)),
+          total: d3.sum(collections, d => d.reduction_hours)
+        })).sort((a, b) => d3.descending(a.total, b.total) || d3.ascending(a.name, b.name));
         document.getElementById("total-hours").textContent = totalHours;
         document.getElementById("total-collections").textContent = format(data.length);
-        document.getElementById("chart-title").textContent = `${format(data.length)} collections · ${totalHours} hours saved`;
+        document.getElementById("total-agencies").textContent = format(agencies.length);
+        document.getElementById("chart-title").textContent = `${format(data.length)} ICRs · ${format(agencies.length)} agencies · ${totalHours} hours saved`;
         chart.textContent = "";
-        const svg = d3.select(chart).append("svg")
-          .attr("role", "group")
-          .attr("aria-label", "Packed circles showing annual hours saved by information collection. Focus a circle for details or activate it to visit its source.");
-
-        const nodes = data.slice().sort((a, b) => d3.descending(a.reduction_hours, b.reduction_hours))
-          .map(d => ({ data: d }));
+        if (!data.length) {
+          chart.textContent = "No collections match the current filters.";
+          return;
+        }
 
         function positionTooltip(x, y) {
           const margin = 12;
@@ -210,51 +230,73 @@
           tooltip.querySelector(".tooltip-agency").textContent = d.data.agency;
           tooltip.querySelector(".tooltip-saved").textContent = format(d.data.reduction_hours);
           tooltip.querySelector(".tooltip-change").textContent = format(d.data.previous_hours) + " → " + format(d.data.new_hours);
+          tooltip.querySelector(".tooltip-status").textContent = d.data.icr_status;
           tooltip.hidden = false;
           const rect = event.currentTarget.getBoundingClientRect();
           positionTooltip(event.type === "focus" ? rect.left + rect.width / 2 : event.clientX,
             event.type === "focus" ? rect.top + rect.height / 2 : event.clientY);
         }
 
-        // A square-root scale makes circle area proportional to saved hours.
-        // Fit the packed circles while applying the 3px floor before packing.
         function render() {
           const width = chart.clientWidth;
           if (!width) return;
-          const height = Math.max(360, Math.min(750, width * 0.9));
-          const availableRadius = Math.min(width, height) / 2 - 8;
-          let low = 0;
-          let high = availableRadius / Math.sqrt(d3.max(data, d => d.reduction_hours));
-          let enclosure;
-          for (let i = 0; i < 25; i++) {
-            const factor = (low + high) / 2;
-            const radius = d3.scaleSqrt().domain([0, 1]).range([0, factor]);
-            nodes.forEach(node => { node.r = Math.max(3, radius(node.data.reduction_hours)); });
-            d3.packSiblings(nodes);
-            enclosure = d3.packEnclose(nodes);
-            if (enclosure.r <= availableRadius) low = factor;
-            else high = factor;
+          const radius = d3.scaleSqrt()
+            .domain([0, d3.max(data, d => d.reduction_hours)])
+            .range([0, 95]);
+          const pack = d3.pack().radius(d => radius(d.data.reduction_hours)).padding(3);
+          let packed = agencies.map(agency => pack(d3.hierarchy({ children: agency.collections })));
+          const maxDiameter = d3.max(packed, root => 2 * root.r);
+          if (maxDiameter > width) {
+            let low = 0;
+            let high = 95;
+            for (let i = 0; i < 30; i++) {
+              const mid = (low + high) / 2;
+              radius.range([0, mid]);
+              const trial = agencies.map(agency => pack(d3.hierarchy({ children: agency.collections })));
+              if (d3.max(trial, root => 2 * root.r) <= width) low = mid;
+              else high = mid;
+            }
+            radius.range([0, low]);
+            packed = agencies.map(agency => pack(d3.hierarchy({ children: agency.collections })));
           }
-          const radius = d3.scaleSqrt().domain([0, 1]).range([0, low]);
-          nodes.forEach(node => { node.r = Math.max(3, radius(node.data.reduction_hours)); });
-          d3.packSiblings(nodes);
-          enclosure = d3.packEnclose(nodes);
-          svg.attr("viewBox", `0 0 ${width} ${height}`).attr("height", height);
-          const links = svg.selectAll("a").data(nodes, d => d.data.icr_reference_number)
-            .join("a")
-            .attr("href", d => d.data.reginfo_url)
-            .attr("target", "_blank")
-            .attr("rel", "noopener noreferrer")
-            .attr("aria-label", d => `${d.data.icr_name}, ${d.data.agency}, ${format(d.data.reduction_hours)} annual hours saved. Opens source in a new tab.`)
-            .on("pointerenter focus", showTooltip)
-            .on("pointermove", (event) => positionTooltip(event.clientX, event.clientY))
-            .on("pointerleave blur", () => { tooltip.hidden = true; });
-          links.selectAll("circle").data(d => [d]).join("circle")
-            .attr("class", "bubble")
-            .attr("cx", d => d.x - enclosure.x + width / 2)
-            .attr("cy", d => d.y - enclosure.y + height / 2)
-            .attr("r", d => d.r)
-            .attr("fill", d => colors[d.data.respondent_type]);
+
+          const panels = d3.select(chart).selectAll(".agency-panel").data(agencies, d => d.name)
+            .join(enter => {
+              const panel = enter.append("section").attr("class", "agency-panel");
+              panel.append("h3").attr("class", "agency-name");
+              panel.append("p").attr("class", "agency-summary");
+              panel.append("svg").attr("role", "group");
+              return panel;
+            })
+            .style("width", (d, i) => `${Math.min(width, Math.max(170, Math.ceil(2 * packed[i].r)))}px`);
+          panels.select(".agency-name").text(d => d.name);
+          panels.select(".agency-summary").text(d => `${format(d.collections.length)} ICR${d.collections.length === 1 ? "" : "s"} · ${format(d.total)} hours saved`);
+          panels.each(function(agency, i) {
+            const root = packed[i];
+            const diameter = Math.ceil(2 * root.r);
+            const svg = d3.select(this).select("svg")
+              .attr("width", diameter).attr("height", diameter)
+              .attr("aria-label", `${agency.name}: packed circles showing annual hours saved. Focus a circle for details or activate it to visit its source.`);
+            svg.selectAll(".agency-circle").data([root]).join("circle")
+              .attr("class", "agency-circle")
+              .attr("cx", diameter / 2).attr("cy", diameter / 2).attr("r", root.r)
+              .attr("fill", "#e7ebe4");
+            const links = svg.selectAll("a").data(root.leaves(), d => d.data.icr_reference_number)
+              .join("a")
+              .attr("href", d => d.data.reginfo_url)
+              .attr("target", "_blank")
+              .attr("rel", "noopener noreferrer")
+              .attr("aria-label", d => `${d.data.icr_name}, ${d.data.agency}, ${format(d.data.reduction_hours)} annual hours saved. Opens source in a new tab.`)
+              .on("pointerenter focus", showTooltip)
+              .on("pointermove", (event) => positionTooltip(event.clientX, event.clientY))
+              .on("pointerleave blur", () => { tooltip.hidden = true; });
+            links.selectAll("circle").data(d => [d]).join("circle")
+              .attr("class", "bubble")
+              .attr("cx", d => d.x - root.x + diameter / 2)
+              .attr("cy", d => d.y - root.y + diameter / 2)
+              .attr("r", d => d.r)
+              .attr("fill", d => colors[d.data.respondent_type]);
+          });
         }
 
         render();
